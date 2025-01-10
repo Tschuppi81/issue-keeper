@@ -22,8 +22,13 @@ export const TicketForm = () => {
 
     try {
       const { error } = await supabase
-        .from('tickets')
-        .insert([formData]);
+        .from("tickets")
+        .insert([{
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone || null,
+          issue: formData.issue,
+        }]);
 
       if (error) throw error;
 
