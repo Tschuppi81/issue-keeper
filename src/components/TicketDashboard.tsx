@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 
 type Ticket = {
   id: number;
@@ -49,6 +51,7 @@ const statusLabels = {
 
 export const TicketDashboard = () => {
   const [tickets, setTickets] = useState<Ticket[]>(mockTickets);
+  const [statusFilter, setStatusFilter] = useState<"all" | Ticket["status"]>("all");
 
   const updateTicketStatus = (ticketId: number, newStatus: Ticket["status"]) => {
     setTickets((prev) =>
@@ -58,11 +61,42 @@ export const TicketDashboard = () => {
     );
   };
 
+  // Sort tickets by creation date (most recent first) and filter by status
+  const filteredAndSortedTickets = tickets
+    .filter((ticket) => statusFilter === "all" || ticket.status === statusFilter)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
   return (
     <div className="container mx-auto py-6">
       <h1 className="text-3xl font-bold mb-6">Ticket Dashboard</h1>
+      
+      <div className="mb-6">
+        <RadioGroup
+          defaultValue="all"
+          onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}
+          className="flex flex-wrap gap-4"
+        >
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="all" id="all" />
+            <Label htmlFor="all">All Tickets</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="open" id="open" />
+            <Label htmlFor="open">Open</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="progress" id="progress" />
+            <Label htmlFor="progress">In Progress</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="done" id="done" />
+            <Label htmlFor="done">Completed</Label>
+          </div>
+        </RadioGroup>
+      </div>
+
       <div className="grid gap-4">
-        {tickets.map((ticket) => (
+        {filteredAndSortedTickets.map((ticket) => (
           <Card key={ticket.id} className="w-full">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xl font-bold">
@@ -83,6 +117,10 @@ export const TicketDashboard = () => {
                 </div>
                 <div>
                   <span className="font-semibold">Issue:</span> {ticket.issue}
+                </div>
+                <div>
+                  <span className="font-semibold">Created:</span>{" "}
+                  {new Date(ticket.createdAt).toLocaleString()}
                 </div>
                 <div className="flex gap-2 mt-4">
                   {ticket.status === "open" && (
