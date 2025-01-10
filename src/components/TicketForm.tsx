@@ -4,9 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
 
 export const TicketForm = () => {
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -14,15 +16,34 @@ export const TicketForm = () => {
     issue: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Here we'll later integrate with the backend
-    console.log("Submitted:", formData);
-    toast({
-      title: "Ticket Submitted",
-      description: "We'll get back to you soon!",
-    });
-    setFormData({ name: "", email: "", phone: "", issue: "" });
+    setIsSubmitting(true);
+
+    try {
+      const { error } = await supabase
+        .from('tickets')
+        .insert([formData]);
+
+      if (error) throw error;
+
+      toast({
+        title: "Ticket Submitted Successfully",
+        description: "We'll get back to you via email soon!",
+      });
+
+      // Reset form
+      setFormData({ name: "", email: "", phone: "", issue: "" });
+    } catch (error) {
+      console.error('Error submitting ticket:', error);
+      toast({
+        title: "Error Submitting Ticket",
+        description: "Please try again later.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (
@@ -82,8 +103,12 @@ export const TicketForm = () => {
               className="w-full min-h-[100px]"
             />
           </div>
-          <Button type="submit" className="w-full">
-            Submit Ticket
+          <Button 
+            type="submit" 
+            className="w-full"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Submitting..." : "Submit Ticket"}
           </Button>
         </form>
       </CardContent>
