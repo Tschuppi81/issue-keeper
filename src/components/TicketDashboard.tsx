@@ -4,38 +4,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 type Ticket = {
-  id: number;
+  id: string;
   name: string;
   email: string;
-  phone: string;
+  phone: string | null;
   issue: string;
   status: "open" | "progress" | "done";
-  createdAt: string;
+  created_at: string;
 };
-
-// Mock data - will be replaced with real data from backend
-const mockTickets: Ticket[] = [
-  {
-    id: 1,
-    name: "John Doe",
-    email: "john@example.com",
-    phone: "123-456-7890",
-    issue: "Cannot access account",
-    status: "open",
-    createdAt: "2024-02-20T10:00:00Z",
-  },
-  {
-    id: 2,
-    name: "Jane Smith",
-    email: "jane@example.com",
-    phone: "098-765-4321",
-    issue: "Payment failed",
-    status: "progress",
-    createdAt: "2024-02-19T15:30:00Z",
-  },
-];
 
 const statusColors = {
   open: "bg-ticket-open text-white",
@@ -49,22 +30,55 @@ const statusLabels = {
   done: "Completed",
 };
 
+const fetchTickets = async () => {
+  const { data, error } = await supabase
+    .from("tickets")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data as Ticket[];
+};
+
 export const TicketDashboard = () => {
-  const [tickets, setTickets] = useState<Ticket[]>(mockTickets);
   const [statusFilter, setStatusFilter] = useState<"all" | Ticket["status"]>("all");
+  const queryClient = useQueryClient();
 
-  const updateTicketStatus = (ticketId: number, newStatus: Ticket["status"]) => {
-    setTickets((prev) =>
-      prev.map((ticket) =>
-        ticket.id === ticketId ? { ...ticket, status: newStatus } : ticket
-      )
-    );
-  };
+  const { data: tickets = [], isLoading, error } = useQuery({
+    queryKey: ["tickets"],
+    queryFn: fetchTickets,
+  });
 
-  // Sort tickets by creation date (most recent first) and filter by status
-  const filteredAndSortedTickets = tickets
-    .filter((ticket) => statusFilter === "all" || ticket.status === statusFilter)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const updateTicketMutation = useMutation({
+    mutationFn: async ({ ticketId, newStatus }: { ticketId: string; newStatus: Ticket["status"] }) => {
+      const { error } = await supabase
+        .from("tickets")
+        .update({ status: newStatus })
+        .eq("id", ticketId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      toast.success("Ticket status updated successfully");
+    },
+    onError: (error) => {
+      console.error("Error updating ticket:", error);
+      toast.error("Failed to update ticket status");
+    },
+  });
+
+  if (isLoading) {
+    return <div className="container mx-auto py-6">Loading tickets...</div>;
+  }
+
+  if (error) {
+    return <div className="container mx-auto py-6">Error loading tickets: {error.message}</div>;
+  }
+
+  const filteredTickets = tickets.filter(
+    (ticket) => statusFilter === "all" || ticket.status === statusFilter
+  );
 
   return (
     <div className="container mx-auto py-6">
@@ -96,11 +110,11 @@ export const TicketDashboard = () => {
       </div>
 
       <div className="grid gap-4">
-        {filteredAndSortedTickets.map((ticket) => (
+        {filteredTickets.map((ticket) => (
           <Card key={ticket.id} className="w-full">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xl font-bold">
-                Ticket #{ticket.id}
+                Ticket #{ticket.id.slice(0, 8)}
               </CardTitle>
               <Badge className={statusColors[ticket.status]}>
                 {statusLabels[ticket.status]}
@@ -112,27 +126,39 @@ export const TicketDashboard = () => {
                   <span className="font-semibold">From:</span> {ticket.name} (
                   {ticket.email})
                 </div>
-                <div>
-                  <span className="font-semibold">Phone:</span> {ticket.phone}
-                </div>
+                {ticket.phone && (
+                  <div>
+                    <span className="font-semibold">Phone:</span> {ticket.phone}
+                  </div>
+                )}
                 <div>
                   <span className="font-semibold">Issue:</span> {ticket.issue}
                 </div>
                 <div>
                   <span className="font-semibold">Created:</span>{" "}
-                  {new Date(ticket.createdAt).toLocaleString()}
+                  {new Date(ticket.created_at).toLocaleString()}
                 </div>
                 <div className="flex gap-2 mt-4">
                   {ticket.status === "open" && (
                     <Button
-                      onClick={() => updateTicketStatus(ticket.id, "progress")}
+                      onClick={() => 
+                        updateTicketMutation.mutate({
+                          ticketId: ticket.id,
+                          newStatus: "progress"
+                        })
+                      }
                     >
                       Accept Ticket
                     </Button>
                   )}
                   {ticket.status === "progress" && (
                     <Button
-                      onClick={() => updateTicketStatus(ticket.id, "done")}
+                      onClick={() => 
+                        updateTicketMutation.mutate({
+                          ticketId: ticket.id,
+                          newStatus: "done"
+                        })
+                      }
                       className="bg-ticket-done hover:bg-ticket-done/90"
                     >
                       Mark as Complete
