@@ -12,6 +12,7 @@ export type Database = {
       tickets: {
         Row: {
           created_at: string
+          duplicate_of: string | null
           email: string
           id: string
           issue: string
@@ -21,6 +22,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          duplicate_of?: string | null
           email: string
           id?: string
           issue: string
@@ -30,6 +32,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          duplicate_of?: string | null
           email?: string
           id?: string
           issue?: string
@@ -37,7 +40,15 @@ export type Database = {
           phone?: string | null
           status?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tickets_duplicate_of_fkey"
+            columns: ["duplicate_of"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

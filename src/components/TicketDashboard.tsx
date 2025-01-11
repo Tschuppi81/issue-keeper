@@ -4,6 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -16,6 +23,7 @@ type Ticket = {
   issue: string;
   status: "open" | "progress" | "done";
   created_at: string;
+  duplicate_of: string | null;
 };
 
 const statusColors = {
@@ -68,6 +76,25 @@ export const TicketDashboard = () => {
     },
   });
 
+  const markAsDuplicateMutation = useMutation({
+    mutationFn: async ({ ticketId, duplicateOfId }: { ticketId: string; duplicateOfId: string }) => {
+      const { error } = await supabase
+        .from("tickets")
+        .update({ duplicate_of: duplicateOfId })
+        .eq("id", ticketId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      toast.success("Ticket marked as duplicate");
+    },
+    onError: (error) => {
+      console.error("Error marking ticket as duplicate:", error);
+      toast.error("Failed to mark ticket as duplicate");
+    },
+  });
+
   if (isLoading) {
     return <div className="container mx-auto py-6">Loading tickets...</div>;
   }
@@ -79,6 +106,11 @@ export const TicketDashboard = () => {
   const filteredTickets = tickets.filter(
     (ticket) => statusFilter === "all" || ticket.status === statusFilter
   );
+
+  const getDuplicateTicket = (duplicateId: string | null) => {
+    if (!duplicateId) return null;
+    return tickets.find((t) => t.id === duplicateId);
+  };
 
   return (
     <div className="container mx-auto py-6">
@@ -110,65 +142,105 @@ export const TicketDashboard = () => {
       </div>
 
       <div className="grid gap-4">
-        {filteredTickets.map((ticket) => (
-          <Card key={ticket.id} className="w-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xl font-bold">
-                Ticket #{ticket.id.slice(0, 8)}
-              </CardTitle>
-              <Badge className={statusColors[ticket.status]}>
-                {statusLabels[ticket.status]}
-              </Badge>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-2">
-                <div>
-                  <span className="font-semibold">From:</span> {ticket.name} (
-                  {ticket.email})
+        {filteredTickets.map((ticket) => {
+          const duplicateTicket = getDuplicateTicket(ticket.duplicate_of);
+          
+          return (
+            <Card key={ticket.id} className="w-full">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-xl font-bold">
+                  Ticket #{ticket.id.slice(0, 8)}
+                </CardTitle>
+                <div className="flex gap-2">
+                  {ticket.duplicate_of && (
+                    <Badge variant="secondary">
+                      Duplicate of #{ticket.duplicate_of.slice(0, 8)}
+                    </Badge>
+                  )}
+                  <Badge className={statusColors[ticket.status]}>
+                    {statusLabels[ticket.status]}
+                  </Badge>
                 </div>
-                {ticket.phone && (
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-2">
                   <div>
-                    <span className="font-semibold">Phone:</span> {ticket.phone}
+                    <span className="font-semibold">From:</span> {ticket.name} (
+                    {ticket.email})
                   </div>
-                )}
-                <div>
-                  <span className="font-semibold">Issue:</span> {ticket.issue}
-                </div>
-                <div>
-                  <span className="font-semibold">Created:</span>{" "}
-                  {new Date(ticket.created_at).toLocaleString()}
-                </div>
-                <div className="flex gap-2 mt-4">
-                  {ticket.status === "open" && (
-                    <Button
-                      onClick={() => 
-                        updateTicketMutation.mutate({
-                          ticketId: ticket.id,
-                          newStatus: "progress"
-                        })
-                      }
-                    >
-                      Accept Ticket
-                    </Button>
+                  {ticket.phone && (
+                    <div>
+                      <span className="font-semibold">Phone:</span> {ticket.phone}
+                    </div>
                   )}
-                  {ticket.status === "progress" && (
-                    <Button
-                      onClick={() => 
-                        updateTicketMutation.mutate({
-                          ticketId: ticket.id,
-                          newStatus: "done"
-                        })
-                      }
-                      className="bg-ticket-done hover:bg-ticket-done/90"
-                    >
-                      Mark as Complete
-                    </Button>
+                  <div>
+                    <span className="font-semibold">Issue:</span> {ticket.issue}
+                  </div>
+                  <div>
+                    <span className="font-semibold">Created:</span>{" "}
+                    {new Date(ticket.created_at).toLocaleString()}
+                  </div>
+                  {duplicateTicket && (
+                    <div className="mt-2 p-3 bg-gray-50 rounded-md">
+                      <p className="font-semibold mb-2">Original Ticket:</p>
+                      <p>{duplicateTicket.issue}</p>
+                    </div>
                   )}
+                  <div className="flex gap-2 mt-4">
+                    {!ticket.duplicate_of && (
+                      <Select
+                        onValueChange={(duplicateOfId) => {
+                          markAsDuplicateMutation.mutate({
+                            ticketId: ticket.id,
+                            duplicateOfId,
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="w-[200px]">
+                          <SelectValue placeholder="Mark as duplicate of..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {tickets
+                            .filter((t) => t.id !== ticket.id && !t.duplicate_of)
+                            .map((t) => (
+                              <SelectItem key={t.id} value={t.id}>
+                                #{t.id.slice(0, 8)} - {t.issue.slice(0, 30)}...
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {ticket.status === "open" && !ticket.duplicate_of && (
+                      <Button
+                        onClick={() => 
+                          updateTicketMutation.mutate({
+                            ticketId: ticket.id,
+                            newStatus: "progress"
+                          })
+                        }
+                      >
+                        Accept Ticket
+                      </Button>
+                    )}
+                    {ticket.status === "progress" && !ticket.duplicate_of && (
+                      <Button
+                        onClick={() => 
+                          updateTicketMutation.mutate({
+                            ticketId: ticket.id,
+                            newStatus: "done"
+                          })
+                        }
+                        className="bg-ticket-done hover:bg-ticket-done/90"
+                      >
+                        Mark as Complete
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
