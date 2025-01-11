@@ -21,21 +21,23 @@ type Ticket = {
   email: string;
   phone: string | null;
   issue: string;
-  status: "open" | "progress" | "done";
+  status: "open" | "in progress" | "done" | "closed";
   created_at: string;
   duplicate_of: string | null;
 };
 
 const statusColors = {
   open: "bg-ticket-open text-white",
-  progress: "bg-ticket-progress text-white",
+  "in progress": "bg-ticket-progress text-white",
   done: "bg-ticket-done text-white",
+  closed: "bg-gray-500 text-white",
 };
 
 const statusLabels = {
   open: "Open",
-  progress: "In Progress",
+  "in progress": "In Progress",
   done: "Completed",
+  closed: "Closed",
 };
 
 const fetchTickets = async () => {
@@ -131,12 +133,16 @@ export const TicketDashboard = () => {
             <Label htmlFor="open">Open</Label>
           </div>
           <div className="flex items-center space-x-2">
-            <RadioGroupItem value="progress" id="progress" />
-            <Label htmlFor="progress">In Progress</Label>
+            <RadioGroupItem value="in progress" id="in-progress" />
+            <Label htmlFor="in-progress">In Progress</Label>
           </div>
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="done" id="done" />
             <Label htmlFor="done">Completed</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="closed" id="closed" />
+            <Label htmlFor="closed">Closed</Label>
           </div>
         </RadioGroup>
       </div>
@@ -188,52 +194,67 @@ export const TicketDashboard = () => {
                   )}
                   <div className="flex gap-2 mt-4">
                     {!ticket.duplicate_of && (
-                      <Select
-                        onValueChange={(duplicateOfId) => {
-                          markAsDuplicateMutation.mutate({
-                            ticketId: ticket.id,
-                            duplicateOfId,
-                          });
-                        }}
-                      >
-                        <SelectTrigger className="w-[200px]">
-                          <SelectValue placeholder="Mark as duplicate of..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {tickets
-                            .filter((t) => t.id !== ticket.id && !t.duplicate_of)
-                            .map((t) => (
-                              <SelectItem key={t.id} value={t.id}>
-                                #{t.id.slice(0, 8)} - {t.issue.slice(0, 30)}...
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                    {ticket.status === "open" && !ticket.duplicate_of && (
-                      <Button
-                        onClick={() => 
-                          updateTicketMutation.mutate({
-                            ticketId: ticket.id,
-                            newStatus: "progress"
-                          })
-                        }
-                      >
-                        Accept Ticket
-                      </Button>
-                    )}
-                    {ticket.status === "progress" && !ticket.duplicate_of && (
-                      <Button
-                        onClick={() => 
-                          updateTicketMutation.mutate({
-                            ticketId: ticket.id,
-                            newStatus: "done"
-                          })
-                        }
-                        className="bg-ticket-done hover:bg-ticket-done/90"
-                      >
-                        Mark as Complete
-                      </Button>
+                      <>
+                        <Select
+                          onValueChange={(duplicateOfId) => {
+                            markAsDuplicateMutation.mutate({
+                              ticketId: ticket.id,
+                              duplicateOfId,
+                            });
+                          }}
+                        >
+                          <SelectTrigger className="w-[200px]">
+                            <SelectValue placeholder="Mark as duplicate of..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {tickets
+                              .filter((t) => t.id !== ticket.id && !t.duplicate_of)
+                              .map((t) => (
+                                <SelectItem key={t.id} value={t.id}>
+                                  #{t.id.slice(0, 8)} - {t.issue.slice(0, 30)}...
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        {ticket.status === "open" && (
+                          <Button
+                            onClick={() => 
+                              updateTicketMutation.mutate({
+                                ticketId: ticket.id,
+                                newStatus: "in progress"
+                              })
+                            }
+                          >
+                            Accept Ticket
+                          </Button>
+                        )}
+                        {ticket.status === "in progress" && (
+                          <Button
+                            onClick={() => 
+                              updateTicketMutation.mutate({
+                                ticketId: ticket.id,
+                                newStatus: "done"
+                              })
+                            }
+                            className="bg-ticket-done hover:bg-ticket-done/90"
+                          >
+                            Mark as Complete
+                          </Button>
+                        )}
+                        {(ticket.status === "done" || ticket.status === "in progress") && (
+                          <Button
+                            onClick={() => 
+                              updateTicketMutation.mutate({
+                                ticketId: ticket.id,
+                                newStatus: "closed"
+                              })
+                            }
+                            variant="destructive"
+                          >
+                            Close Ticket
+                          </Button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
